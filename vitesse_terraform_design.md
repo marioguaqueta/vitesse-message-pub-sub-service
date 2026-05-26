@@ -37,9 +37,9 @@ Vitesse v11 es una plataforma de mensajería multicanal (WhatsApp, Instagram, Me
 
 | Capa | Servicio GCP | Responsabilidad |
 |:----:|:------------:|:----------------|
-| 🗄️ **Event Log** | Cloud Storage | Registro inmutable de eventos — `/active`, `/done`, `/error`, `/archive`, `/data` |
-| 🔁 **Backbone Transaccional** | Cloud Pub/Sub | Desacoplamiento total, buffering, reintentos y DLQ entre todos los componentes |
-| ⚡ **Proyección Viva** | Firestore Native | Índices de correlación y vista viva para el frontend sin polling |
+| **Event Log** | Cloud Storage | Registro inmutable de eventos — `/active`, `/done`, `/error`, `/archive`, `/data` |
+| **Backbone Transaccional** | Cloud Pub/Sub | Desacoplamiento total, buffering, reintentos y DLQ entre todos los componentes |
+| **Proyección Viva** | Firestore Native | Índices de correlación y vista viva para el frontend sin polling |
 
 > **Regla de diseño core:** Ningún componente de negocio invoca a otro directamente. Todo evento operativo —outbound, inbound, status, media, maintenance— pasa primero por Pub/Sub.
 
@@ -47,33 +47,33 @@ Vitesse v11 es una plataforma de mensajería multicanal (WhatsApp, Instagram, Me
 
 ```mermaid
 graph TB
-    FE["🖥️ Frontend"]
-    API["API Gateway"]
-    EXT["🌐 Gupshup / Meta\nWebhooks"]
+  FE["Frontend"]
+  API["API Gateway"]
+  EXT["Gupshup / Meta\nWebhooks"]
 
-    subgraph PIPELINE["Pipeline Operativo"]
-        direction LR
-        P["⚙️ CRF Parser\nCRF Receptor\nCRF Sender\nCRF Processor\nCRF Projector\nCRF Media Handler"]
-    end
+  subgraph PIPELINE["Pipeline Operativo"]
+    direction LR
+    P["CRF Parser\nCRF Receptor\nCRF Sender\nCRF Processor\nCRF Projector\nCRF Media Handler"]
+  end
 
-    subgraph LAYER3["🔶 Firestore — Proyección Viva"]
-        FS["conversations · gsid_map\nwamid_map · active_conv\nopt_out_list"]
-    end
+  subgraph LAYER3["Firestore — Proyección Viva"]
+    FS["conversations · gsid_map\nwamid_map · active_conv\nopt_out_list"]
+  end
 
-    subgraph LAYER2["🔷 Cloud Pub/Sub — Backbone Transaccional"]
-        PS["outbound-commands · inbound-events · status-events\nprojection-updates · maintenance-commands · media-commands\n+ 6 Dead Letter Topics"]
-    end
+  subgraph LAYER2["Cloud Pub/Sub — Backbone Transaccional"]
+    PS["outbound-commands · inbound-events · status-events\nprojection-updates · maintenance-commands · media-commands\n+ 6 Dead Letter Topics"]
+  end
 
-    subgraph LAYER1["⬛ Cloud Storage — Event Log Inmutable"]
-        GCS["/active  ·  /done  ·  /error  ·  /archive  ·  /data"]
-    end
+  subgraph LAYER1["Cloud Storage — Event Log Inmutable"]
+    GCS["/active · /done · /error · /archive · /data"]
+  end
 
-    API --> PIPELINE
-    EXT --> PIPELINE
-    PIPELINE <--> LAYER2
-    PIPELINE --> LAYER1
-    PIPELINE --> LAYER3
-    FE -->|push / realtime| LAYER3
+  API --> PIPELINE
+  EXT --> PIPELINE
+  PIPELINE <--> LAYER2
+  PIPELINE --> LAYER1
+  PIPELINE --> LAYER3
+  FE -->|push / realtime| LAYER3
 ```
 
 ---
@@ -82,12 +82,12 @@ graph TB
 
 | Principio | Decisión de Arquitectura | Resultado Esperado |
 |:----------|:------------------------|:-------------------|
-| 🧵 Conversación como entidad raíz | `vitesse_msg_id` es la raíz de conversación | Todos los `gsId`/`wamid` se correlacionan contra un mismo hilo |
-| 💾 Event log barato | `/active` + `/archive` + `/data` en Cloud Storage | Replay, compresión, auditoría y analítica sin saturar la BD |
-| 🔍 Lookup rápido | Firestore para índices y proyección viva | Frontend y correlación sin listar objetos en Storage |
-| 📡 Frontend por push | Firestore + listeners desde backend | Sin polling, menor latencia visible |
-| 🏷️ Campaign siempre presente | `campaign_id` real o sintético mensual (`organic_YYYY_MM`) | Trazabilidad comercial completa |
-| 🔒 Multi-tenant estricto | Recursos dedicados en prod/preprod, prefijos en dev/staging | Aislamiento de datos garantizado por cliente |
+| Conversación como entidad raíz | `vitesse_msg_id` es la raíz de conversación | Todos los `gsId`/`wamid` se correlacionan contra un mismo hilo |
+| Event log barato | `/active` + `/archive` + `/data` en Cloud Storage | Replay, compresión, auditoría y analítica sin saturar la BD |
+| Lookup rápido | Firestore para índices y proyección viva | Frontend y correlación sin listar objetos en Storage |
+| Frontend por push | Firestore + listeners desde backend | Sin polling, menor latencia visible |
+| Campaign siempre presente | `campaign_id` real o sintético mensual (`organic_YYYY_MM`) | Trazabilidad comercial completa |
+| Multi-tenant estricto | Recursos dedicados en prod/preprod, prefijos en dev/staging | Aislamiento de datos garantizado por cliente |
 
 ---
 
@@ -97,40 +97,40 @@ graph TB
 
 ```mermaid
 graph TB
-    subgraph SHARED["🔵  Dev / Staging — Recursos Compartidos"]
-        direction TB
-        SP["🏗️ Proyecto: vtss-dev · vtss-stg"]
-        SM["🪣 vtss-{env}-messaging\n(1 bucket compartido)"]
-        SL["🖼️ vtss-{env}-multimedia\n(1 bucket compartido)"]
-        SF["🔥 vtss-{env}-db\n(1 Firestore, prefijos por cliente)"]
-        SS["📨 Topics Pub/Sub compartidos\ncustomer_id en atributos del mensaje"]
-        SP --> SM & SL & SF & SS
-    end
+  subgraph SHARED["Dev / Staging — Recursos Compartidos"]
+    direction TB
+    SP["Proyecto: vtss-dev · vtss-stg"]
+    SM["vtss-{env}-messaging\n(1 bucket compartido)"]
+    SL["vtss-{env}-multimedia\n(1 bucket compartido)"]
+    SF["vtss-{env}-db\n(1 Firestore, prefijos por cliente)"]
+    SS["Topics Pub/Sub compartidos\ncustomer_id en atributos del mensaje"]
+    SP --> SM & SL & SF & SS
+  end
 
-    subgraph DEDICATED["🟠  Preprod / Prod — Recursos Dedicados por Cliente"]
-        direction LR
-        subgraph CA["Cliente A"]
-            direction TB
-            AM["🪣 -A-msg"]
-            AL["🖼️ -A-mlt"]
-            AF["🔥 -A-db"]
-            AS["📨 Topics A-*"]
-        end
-        subgraph CB["Cliente B"]
-            direction TB
-            BM["🪣 -B-msg"]
-            BL["🖼️ -B-mlt"]
-            BF["🔥 -B-db"]
-            BS["📨 Topics B-*"]
-        end
-        subgraph CC["Cliente N"]
-            direction TB
-            CM["🪣 -N-msg"]
-            CL["🖼️ -N-mlt"]
-            CF["🔥 -N-db"]
-            CS["📨 Topics N-*"]
-        end
+  subgraph DEDICATED["Preprod / Prod — Recursos Dedicados por Cliente"]
+    direction LR
+    subgraph CA["Cliente A"]
+      direction TB
+      AM["-A-msg"]
+      AL["-A-mlt"]
+      AF["-A-db"]
+      AS["Topics A-*"]
     end
+    subgraph CB["Cliente B"]
+      direction TB
+      BM["-B-msg"]
+      BL["-B-mlt"]
+      BF["-B-db"]
+      BS["Topics B-*"]
+    end
+    subgraph CC["Cliente N"]
+      direction TB
+      CM["-N-msg"]
+      CL["-N-mlt"]
+      CF["-N-db"]
+      CS["Topics N-*"]
+    end
+  end
 ```
 
 ### 3.2 Dev y Staging — Recursos Compartidos
@@ -199,48 +199,48 @@ El bucket de mensajería organiza sus objetos según el contrato de identificado
 ```
 vtss-{env}-{cid}-msg/
 │
-├── active/                                                              ← Live Queue: operaciones en vuelo
-│   ├── todo/                                                            ← Pendientes de procesar
-│   │   ├── outbound/
-│   │   │   └── {channel_provider}/{channel_identifier}/{contact_identifier}/    ← vm_conv_id
-│   │   │       └── YYYYMMDD/{timestamp}-{uuid[:6]}.json                ← vm_msg_id
-│   │   └── inbound/
-│   │       ├── message/
-│   │       │   └── {channel_provider}/{channel_identifier}/{contact_identifier}/
-│   │       │       └── YYYYMMDD/{timestamp}-{uuid[:6]}.json
-│   │       └── status/
-│   │           └── {channel_provider}/{channel_identifier}/{contact_identifier}/
-│   │               └── YYYYMMDD/{timestamp}-{uuid[:6]}.json
-│   └── in_process/                                                      ← Siendo procesados actualmente
-│       ├── outbound/
-│       │   └── {channel_provider}/{channel_identifier}/{contact_identifier}/
-│       │       └── YYYYMMDD/{timestamp}-{uuid[:6]}.json
-│       └── inbound/
-│           ├── message/...
-│           └── status/...
+├── active/                               ← Live Queue: operaciones en vuelo
+│  ├── todo/                              ← Pendientes de procesar
+│  │  ├── outbound/
+│  │  │  └── {channel_provider}/{channel_identifier}/{contact_identifier}/  ← vm_conv_id
+│  │  │    └── YYYYMMDD/{timestamp}-{uuid[:6]}.json        ← vm_msg_id
+│  │  └── inbound/
+│  │    ├── message/
+│  │    │  └── {channel_provider}/{channel_identifier}/{contact_identifier}/
+│  │    │    └── YYYYMMDD/{timestamp}-{uuid[:6]}.json
+│  │    └── status/
+│  │      └── {channel_provider}/{channel_identifier}/{contact_identifier}/
+│  │        └── YYYYMMDD/{timestamp}-{uuid[:6]}.json
+│  └── in_process/                           ← Siendo procesados actualmente
+│    ├── outbound/
+│    │  └── {channel_provider}/{channel_identifier}/{contact_identifier}/
+│    │    └── YYYYMMDD/{timestamp}-{uuid[:6]}.json
+│    └── inbound/
+│      ├── message/...
+│      └── status/...
 │
-├── done/                                                                ← Procesados exitosamente
-│   ├── outbound/
-│   │   └── {channel_provider}/{channel_identifier}/{contact_identifier}/
-│   │       └── YYYYMMDD/{timestamp}-{uuid[:6]}.json
-│   └── inbound/
-│       ├── message/...
-│       └── status/...
+├── done/                                ← Procesados exitosamente
+│  ├── outbound/
+│  │  └── {channel_provider}/{channel_identifier}/{contact_identifier}/
+│  │    └── YYYYMMDD/{timestamp}-{uuid[:6]}.json
+│  └── inbound/
+│    ├── message/...
+│    └── status/...
 │
-├── error/                                                               ← DLQ agotado / sin ack del proveedor
-│   ├── outbound/...
-│   └── inbound/
-│       ├── message/...
-│       └── status/...
+├── error/                                ← DLQ agotado / sin ack del proveedor
+│  ├── outbound/...
+│  └── inbound/
+│    ├── message/...
+│    └── status/...
 │
-├── campaign/                                                            ← Estructura secundaria de punteros
-│   └── {channel_provider}/{channel_identifier}/{campaign_id}/
+├── campaign/                              ← Estructura secundaria de punteros
+│  └── {channel_provider}/{channel_identifier}/{campaign_id}/
 │
-├── data/                                                                ← Archivos resumen — Aggregator
-│   └── {channel_provider}/{channel_identifier}/YYYYMMDD.parquet
+├── data/                                ← Archivos resumen — Aggregator
+│  └── {channel_provider}/{channel_identifier}/YYYYMMDD.parquet
 │
-└── archive/                                                             ← Archivos comprimidos — Compressor
-    └── {channel_provider}/{channel_identifier}/YYYYMMDD.jsonl.gz
+└── archive/                               ← Archivos comprimidos — Compressor
+  └── {channel_provider}/{channel_identifier}/YYYYMMDD.jsonl.gz
 ```
 
 #### Valores de `channel_provider`
@@ -265,11 +265,11 @@ vtss-{env}-{cid}-msg/
 vtss-{env}-{cid}-mlt/
 │
 ├── catalog_files/
-│   └── {file_name}-{hash}.{ext}                             ← Assets reutilizables del cliente
+│  └── {file_name}-{hash}.{ext}               ← Assets reutilizables del cliente
 │
 └── conversational_files/
-    └── {channel_provider}/{channel_identifier}/{contact_identifier}/    ← vm_conv_id
-        └── {file_name}-{hash}.{ext}                         ← SHA-256 en metadata
+  └── {channel_provider}/{channel_identifier}/{contact_identifier}/  ← vm_conv_id
+    └── {file_name}-{hash}.{ext}             ← SHA-256 en metadata
 ```
 
 La estructura basada en `vm_conv_id` permite permisos dinámicos, expiración por conversación y auditoría por contacto.
@@ -278,13 +278,13 @@ La estructura basada en `vm_conv_id` permite permisos dinámicos, expiración po
 
 | Prefijo | Acción | Condición |
 |:--------|:------:|:---------:|
-| `done/` | 🗑️ Delete | age > **45 días** |
-| `active/in_process/` | 🗑️ Delete | age > **7 días** (huérfanos) |
-| `error/` | 🗑️ Delete | age > **90 días** |
+| `done/` | Delete | age > **45 días** |
+| `active/in_process/` | Delete | age > **7 días** (huérfanos) |
+| `error/` | Delete | age > **90 días** |
 | `archive/` | → Nearline | age > **30 días** |
 | `archive/` | → Coldline | age > **365 días** |
 | `data/` | → Nearline | age > **30 días** |
-| `data/` | 🗑️ Delete | age > **730 días** |
+| `data/` | Delete | age > **730 días** |
 | `conversational_files/` (multimedia) | → Nearline | age > **90 días** |
 
 ### 5.4 Dev/Staging — Separación por Prefijo de Objeto
@@ -305,65 +305,65 @@ data/{customer_id}/{channel_provider}/{channel_identifier}/YYYYMMDD.parquet
 
 ```mermaid
 flowchart LR
-    classDef producer fill:#4285F4,color:#fff,stroke:none,rx:6
-    classDef topic    fill:#FBBC04,color:#333,stroke:none,rx:4
-    classDef dlq      fill:#EA4335,color:#fff,stroke:none,rx:4
-    classDef consumer fill:#34A853,color:#fff,stroke:none,rx:6
+  classDef producer fill:#4285F4,color:#fff,stroke:none,rx:6
+  classDef topic  fill:#FBBC04,color:#333,stroke:none,rx:4
+  classDef dlq   fill:#EA4335,color:#fff,stroke:none,rx:4
+  classDef consumer fill:#34A853,color:#fff,stroke:none,rx:6
 
-    subgraph PROD["⚙️ Productores"]
-        direction TB
-        P1["CRF Parser\nCampaign Loader"]:::producer
-        P2["CRF Receptor"]:::producer
-        P3["CRF Receptor DLR"]:::producer
-        P4["CRF Processor"]:::producer
-        P5["Cloud Scheduler"]:::producer
-    end
+  subgraph PROD["Productores"]
+    direction TB
+    P1["CRF Parser\nCampaign Loader"]:::producer
+    P2["CRF Receptor"]:::producer
+    P3["CRF Receptor DLR"]:::producer
+    P4["CRF Processor"]:::producer
+    P5["Cloud Scheduler"]:::producer
+  end
 
-    subgraph TOPICS["📨 Topics"]
-        direction TB
-        T1(["outbound-commands"]):::topic
-        T2(["inbound-events"]):::topic
-        T3(["status-events"]):::topic
-        T4(["projection-updates"]):::topic
-        T5(["maintenance-commands"]):::topic
-        T6(["media-commands"]):::topic
-    end
+  subgraph TOPICS["Topics"]
+    direction TB
+    T1(["outbound-commands"]):::topic
+    T2(["inbound-events"]):::topic
+    T3(["status-events"]):::topic
+    T4(["projection-updates"]):::topic
+    T5(["maintenance-commands"]):::topic
+    T6(["media-commands"]):::topic
+  end
 
-    subgraph DLQS["💀 Dead Letter Topics"]
-        direction TB
-        D1(["dlq-outbound"]):::dlq
-        D2(["dlq-inbound"]):::dlq
-        D3(["dlq-status"]):::dlq
-        D4(["dlq-projection"]):::dlq
-        D5(["dlq-maintenance"]):::dlq
-        D6(["dlq-media"]):::dlq
-    end
+  subgraph DLQS["Dead Letter Topics"]
+    direction TB
+    D1(["dlq-outbound"]):::dlq
+    D2(["dlq-inbound"]):::dlq
+    D3(["dlq-status"]):::dlq
+    D4(["dlq-projection"]):::dlq
+    D5(["dlq-maintenance"]):::dlq
+    D6(["dlq-media"]):::dlq
+  end
 
-    subgraph CONS["🔧 Consumidores"]
-        direction TB
-        C1["CRF Sender"]:::consumer
-        C2["CRF Processor"]:::consumer
-        C3["CRF Processor DLR"]:::consumer
-        C4["CRF Projector"]:::consumer
-        C5["Aggregator\nCompressor\nCleanup Worker"]:::consumer
-        C6["CRF Media Handler"]:::consumer
-    end
+  subgraph CONS["Consumidores"]
+    direction TB
+    C1["CRF Sender"]:::consumer
+    C2["CRF Processor"]:::consumer
+    C3["CRF Processor DLR"]:::consumer
+    C4["CRF Projector"]:::consumer
+    C5["Aggregator\nCompressor\nCleanup Worker"]:::consumer
+    C6["CRF Media Handler"]:::consumer
+  end
 
-    P1 --> T1 --> C1
-    P2 --> T2 --> C2
-    P3 --> T3 --> C3
-    P4 --> T4 --> C4
-    P5 --> T5 --> C5
-    P2 --> T6
-    P4 --> T6
-    T6 --> C6
+  P1 --> T1 --> C1
+  P2 --> T2 --> C2
+  P3 --> T3 --> C3
+  P4 --> T4 --> C4
+  P5 --> T5 --> C5
+  P2 --> T6
+  P4 --> T6
+  T6 --> C6
 
-    T1 -. "5 intentos" .-> D1
-    T2 -. "5 intentos" .-> D2
-    T3 -. "5 intentos" .-> D3
-    T4 -. "5 intentos" .-> D4
-    T5 -. "3 intentos" .-> D5
-    T6 -. "5 intentos" .-> D6
+  T1 -. "5 intentos" .-> D1
+  T2 -. "5 intentos" .-> D2
+  T3 -. "5 intentos" .-> D3
+  T4 -. "5 intentos" .-> D4
+  T5 -. "3 intentos" .-> D5
+  T6 -. "5 intentos" .-> D6
 ```
 
 ### 6.2 Configuración de Topics
@@ -385,17 +385,17 @@ flowchart LR
 
 ```json
 {
-  "attributes": {
-    "event_type": "outbound_command",
-    "vitesse_msg_id": "...",
-    "campaign_id": "...",
-    "client_id": "...",
-    "phone_hash": "...",
-    "storage_path": "...",
-    "local_ref": "...",
-    "event_ts": "ISO-8601"
-  },
-  "body": { "storage_path": "...", "local_ref": "..." }
+ "attributes": {
+  "event_type": "outbound_command",
+  "vitesse_msg_id": "...",
+  "campaign_id": "...",
+  "client_id": "...",
+  "phone_hash": "...",
+  "storage_path": "...",
+  "local_ref": "...",
+  "event_ts": "ISO-8601"
+ },
+ "body": { "storage_path": "...", "local_ref": "..." }
 }
 ```
 </details>
@@ -405,16 +405,16 @@ flowchart LR
 
 ```json
 {
-  "attributes": {
-    "event_type": "inbound_message",
-    "wamid": "...",
-    "client_id": "...",
-    "campaign_id": "...",
-    "vitesse_msg_id": "... (si ya fue resuelto)",
-    "storage_path": "...",
-    "event_ts": "ISO-8601"
-  },
-  "body": { "storage_path": "..." }
+ "attributes": {
+  "event_type": "inbound_message",
+  "wamid": "...",
+  "client_id": "...",
+  "campaign_id": "...",
+  "vitesse_msg_id": "... (si ya fue resuelto)",
+  "storage_path": "...",
+  "event_ts": "ISO-8601"
+ },
+ "body": { "storage_path": "..." }
 }
 ```
 </details>
@@ -424,17 +424,17 @@ flowchart LR
 
 ```json
 {
-  "attributes": {
-    "event_type": "status_event",
-    "gsId": "...",
-    "status": "enqueued | sent | delivered | read | failed",
-    "client_id": "...",
-    "campaign_id": "...",
-    "vitesse_msg_id": "...",
-    "storage_path": "...",
-    "event_ts": "ISO-8601"
-  },
-  "body": { "storage_path": "..." }
+ "attributes": {
+  "event_type": "status_event",
+  "gsId": "...",
+  "status": "enqueued | sent | delivered | read | failed",
+  "client_id": "...",
+  "campaign_id": "...",
+  "vitesse_msg_id": "...",
+  "storage_path": "...",
+  "event_ts": "ISO-8601"
+ },
+ "body": { "storage_path": "..." }
 }
 ```
 </details>
@@ -444,15 +444,15 @@ flowchart LR
 
 ```json
 {
-  "attributes": {
-    "event_type": "projection_update",
-    "vitesse_msg_id": "...",
-    "client_id": "...",
-    "campaign_id": "...",
-    "storage_path": "...",
-    "entity_target": "firestore"
-  },
-  "body": { "storage_path": "..." }
+ "attributes": {
+  "event_type": "projection_update",
+  "vitesse_msg_id": "...",
+  "client_id": "...",
+  "campaign_id": "...",
+  "storage_path": "...",
+  "entity_target": "firestore"
+ },
+ "body": { "storage_path": "..." }
 }
 ```
 </details>
@@ -462,12 +462,12 @@ flowchart LR
 
 ```json
 {
-  "attributes": {
-    "event_type": "maintenance_command",
-    "command_type": "aggregate | compress | cleanup | purge_recent_events",
-    "target_date": "YYYY-MM-DD"
-  },
-  "body": { "customer_id": "...", "job_params": {} }
+ "attributes": {
+  "event_type": "maintenance_command",
+  "command_type": "aggregate | compress | cleanup | purge_recent_events",
+  "target_date": "YYYY-MM-DD"
+ },
+ "body": { "customer_id": "...", "job_params": {} }
 }
 ```
 </details>
@@ -477,20 +477,20 @@ flowchart LR
 
 ```json
 {
-  "attributes": {
-    "event_type": "media_command",
-    "media_type": "...", "mime_type": "...",
-    "vm_conv_id": "...", "vm_msg_id": "...",
-    "gsId": "...", "wamid": "...",
-    "client_id": "...", "campaign_id": "...",
-    "vitesse_msg_id": "...", "event_ts": "ISO-8601"
-  },
-  "body": {
-    "source_storage_url": "...",
-    "target_storage_url_prefix": "...",
-    "file_name": "...",
-    "file_hash": "sha256:..."
-  }
+ "attributes": {
+  "event_type": "media_command",
+  "media_type": "...", "mime_type": "...",
+  "vm_conv_id": "...", "vm_msg_id": "...",
+  "gsId": "...", "wamid": "...",
+  "client_id": "...", "campaign_id": "...",
+  "vitesse_msg_id": "...", "event_ts": "ISO-8601"
+ },
+ "body": {
+  "source_storage_url": "...",
+  "target_storage_url_prefix": "...",
+  "file_name": "...",
+  "file_hash": "sha256:..."
+ }
 }
 ```
 </details>
@@ -512,62 +512,62 @@ flowchart LR
 
 ```mermaid
 erDiagram
-    conversations {
-        string vitesse_msg_id PK
-        string app
-        string phone
-        string campaign_id
-        bool   active
-        string last_status
-        string last_preview
-        timestamp last_event_ts
-        timestamp ttl_timestamp
-    }
-    recent_events {
-        string doc_id PK
-        string direction
-        string gsId
-        string wamid
-        string last_status
-        string text_preview
-        string storage_path
-        timestamp event_ts
-        timestamp ttl_timestamp
-    }
-    gsid_map {
-        string gsId PK
-        string vitesse_msg_id
-        string last_status
-        timestamp delivered_at
-        timestamp read_at
-        timestamp ttl_timestamp
-    }
-    wamid_map {
-        string wamid PK
-        string vitesse_msg_id
-        string direction
-        timestamp last_event_ts
-        timestamp ttl_timestamp
-    }
-    active_conv {
-        string app_phone_hash PK
-        string vitesse_msg_id
-        timestamp updated_at
-        timestamp expires_at
-        timestamp ttl_timestamp
-    }
-    opt_out_list {
-        string app_phone_hash PK
-        bool   opted_out
-        string source
-        string keyword
-        timestamp updated_at
-    }
+  conversations {
+    string vitesse_msg_id PK
+    string app
+    string phone
+    string campaign_id
+    bool  active
+    string last_status
+    string last_preview
+    timestamp last_event_ts
+    timestamp ttl_timestamp
+  }
+  recent_events {
+    string doc_id PK
+    string direction
+    string gsId
+    string wamid
+    string last_status
+    string text_preview
+    string storage_path
+    timestamp event_ts
+    timestamp ttl_timestamp
+  }
+  gsid_map {
+    string gsId PK
+    string vitesse_msg_id
+    string last_status
+    timestamp delivered_at
+    timestamp read_at
+    timestamp ttl_timestamp
+  }
+  wamid_map {
+    string wamid PK
+    string vitesse_msg_id
+    string direction
+    timestamp last_event_ts
+    timestamp ttl_timestamp
+  }
+  active_conv {
+    string app_phone_hash PK
+    string vitesse_msg_id
+    timestamp updated_at
+    timestamp expires_at
+    timestamp ttl_timestamp
+  }
+  opt_out_list {
+    string app_phone_hash PK
+    bool  opted_out
+    string source
+    string keyword
+    timestamp updated_at
+  }
 
-    conversations ||--o{ recent_events : "subcollection"
-    conversations }o--|| gsid_map       : "gsId → vitesse_msg_id"
-    conversations }o--|| wamid_map      : "wamid → vitesse_msg_id"
-    conversations }o--o| active_conv    : "activa por app+phone"
+  conversations ||--o{ recent_events : "subcollection"
+  conversations }o--|| gsid_map    : "gsId → vitesse_msg_id"
+  conversations }o--|| wamid_map   : "wamid → vitesse_msg_id"
+  conversations }o--o| active_conv  : "activa por app+phone"
 ```
 
 ### 7.2 TTL por Colección
@@ -579,7 +579,7 @@ erDiagram
 | `gsid_map` | **90 días** | `ttl_timestamp` | Proyección consolidada outbound + DLRs |
 | `wamid_map` | **90 días** | `ttl_timestamp` | |
 | `active_conv` | **72 h** | `ttl_timestamp` | Configurable por tenant |
-| `opt_out_list` | ♾️ Sin TTL | — | Requiere baja explícita |
+| `opt_out_list` | Sin TTL | — | Requiere baja explícita |
 | `contacts` | **365 días** | `ttl_timestamp` | |
 | `contacts_lists` | **365 días** | `ttl_timestamp` | |
 | `contact_segments` | **365 días** | `ttl_timestamp` | |
@@ -598,7 +598,7 @@ vtss-dev-db/
 ├── c001_active_conv/{hash}
 ├── c002_conversations/{vitesse_msg_id}
 └── c002_gsid_map/{gsId}
-    ...
+  ...
 ```
 
 ### 7.4 Reglas de Materialización
@@ -634,51 +634,51 @@ vtss-dev-db/
 
 ```mermaid
 graph LR
-    classDef sa     fill:#4285F4,color:#fff,stroke:none
-    classDef res    fill:#34A853,color:#fff,stroke:none
-    classDef tenant fill:#FBBC04,color:#333,stroke:none
+  classDef sa   fill:#4285F4,color:#fff,stroke:none
+  classDef res  fill:#34A853,color:#fff,stroke:none
+  classDef tenant fill:#FBBC04,color:#333,stroke:none
 
-    subgraph WORKLOAD["🔵 Service Accounts Workload"]
-        PARSER["crf-parser"]:::sa
-        RECEPTOR["crf-receptor"]:::sa
-        SENDER["crf-sender"]:::sa
-        PROCESSOR["crf-processor"]:::sa
-        MEDIA["crf-media"]:::sa
-        PROJECTOR["crf-projector"]:::sa
-        SCHED["scheduler"]:::sa
-    end
+  subgraph WORKLOAD["Service Accounts Workload"]
+    PARSER["crf-parser"]:::sa
+    RECEPTOR["crf-receptor"]:::sa
+    SENDER["crf-sender"]:::sa
+    PROCESSOR["crf-processor"]:::sa
+    MEDIA["crf-media"]:::sa
+    PROJECTOR["crf-projector"]:::sa
+    SCHED["scheduler"]:::sa
+  end
 
-    subgraph CUSTOMER_SA["🟡 Service Accounts por Cliente"]
-        BE["cid-be\n(Backend Admin)"]:::tenant
-        FE["cid-fe\n(Frontend Read-only)"]:::tenant
-    end
+  subgraph CUSTOMER_SA["Service Accounts por Cliente"]
+    BE["cid-be\n(Backend Admin)"]:::tenant
+    FE["cid-fe\n(Frontend Read-only)"]:::tenant
+  end
 
-    subgraph RESOURCES["🟢 Recursos GCP"]
-        GCS["☁️ Cloud Storage\n(buckets)"]:::res
-        PS["📨 Pub/Sub\n(topics + subs)"]:::res
-        FS["🔥 Firestore\n(database)"]:::res
-    end
+  subgraph RESOURCES["Recursos GCP"]
+    GCS["Cloud Storage\n(buckets)"]:::res
+    PS["Pub/Sub\n(topics + subs)"]:::res
+    FS["Firestore\n(database)"]:::res
+  end
 
-    PARSER  -->|objectCreator| GCS
-    PARSER  -->|publisher| PS
-    PARSER  -->|user| FS
-    RECEPTOR -->|objectCreator| GCS
-    RECEPTOR -->|publisher| PS
-    SENDER   -->|objectAdmin| GCS
-    SENDER   -->|subscriber| PS
-    PROCESSOR -->|objectAdmin| GCS
-    PROCESSOR -->|sub + pub| PS
-    PROCESSOR -->|user| FS
-    MEDIA    -->|objectAdmin| GCS
-    MEDIA    -->|subscriber| PS
-    PROJECTOR -->|subscriber| PS
-    PROJECTOR -->|user| FS
-    SCHED   -->|publisher| PS
+  PARSER -->|objectCreator| GCS
+  PARSER -->|publisher| PS
+  PARSER -->|user| FS
+  RECEPTOR -->|objectCreator| GCS
+  RECEPTOR -->|publisher| PS
+  SENDER  -->|objectAdmin| GCS
+  SENDER  -->|subscriber| PS
+  PROCESSOR -->|objectAdmin| GCS
+  PROCESSOR -->|sub + pub| PS
+  PROCESSOR -->|user| FS
+  MEDIA  -->|objectAdmin| GCS
+  MEDIA  -->|subscriber| PS
+  PROJECTOR -->|subscriber| PS
+  PROJECTOR -->|user| FS
+  SCHED  -->|publisher| PS
 
-    BE -->|objectAdmin| GCS
-    BE -->|pub + sub| PS
-    BE -->|user| FS
-    FE -->|viewer| FS
+  BE -->|objectAdmin| GCS
+  BE -->|pub + sub| PS
+  BE -->|user| FS
+  FE -->|viewer| FS
 ```
 
 ---
@@ -688,51 +688,51 @@ graph LR
 ```
 terraform/
 ├── environments/
-│   ├── dev/             ← Usa módulos *_shared
-│   │   ├── main.tf
-│   │   ├── variables.tf
-│   │   ├── outputs.tf
-│   │   └── terraform.tfvars
-│   ├── staging/         ← Idéntico a dev
-│   ├── preprod/         ← Usa módulos *_customer con for_each
-│   │   ├── main.tf
-│   │   ├── variables.tf
-│   │   ├── outputs.tf
-│   │   └── terraform.tfvars
-│   └── prod/            ← Idéntico a preprod
+│  ├── dev/       ← Usa módulos *_shared
+│  │  ├── main.tf
+│  │  ├── variables.tf
+│  │  ├── outputs.tf
+│  │  └── terraform.tfvars
+│  ├── staging/     ← Idéntico a dev
+│  ├── preprod/     ← Usa módulos *_customer con for_each
+│  │  ├── main.tf
+│  │  ├── variables.tf
+│  │  ├── outputs.tf
+│  │  └── terraform.tfvars
+│  └── prod/      ← Idéntico a preprod
 │
 └── modules/
-    ├── gcp_project/     ← Habilita 13 APIs · crea 7 SAs workload
-    ├── storage_shared/  ← 2 buckets compartidos + lifecycle rules
-    ├── storage_customer/← 2 buckets dedicados por cliente
-    ├── firestore_shared/← 1 DB Firestore + TTL en todas las colecciones
-    ├── firestore_customer/ ← 1 DB Firestore dedicada + 11 TTL fields
-    ├── pubsub_shared/   ← 6 topics + 6 DLQs + 6 subscriptions compartidos
-    ├── pubsub_customer/ ← Ídem dedicado por cliente
-    ├── iam_customer/    ← 2 SAs (be + fe) + todos los IAM bindings
-    └── scheduler/       ← 4 Cloud Scheduler jobs de mantenimiento
+  ├── gcp_project/   ← Habilita 13 APIs · crea 7 SAs workload
+  ├── storage_shared/ ← 2 buckets compartidos + lifecycle rules
+  ├── storage_customer/← 2 buckets dedicados por cliente
+  ├── firestore_shared/← 1 DB Firestore + TTL en todas las colecciones
+  ├── firestore_customer/ ← 1 DB Firestore dedicada + 11 TTL fields
+  ├── pubsub_shared/  ← 6 topics + 6 DLQs + 6 subscriptions compartidos
+  ├── pubsub_customer/ ← Ídem dedicado por cliente
+  ├── iam_customer/  ← 2 SAs (be + fe) + todos los IAM bindings
+  └── scheduler/    ← 4 Cloud Scheduler jobs de mantenimiento
 ```
 
 ### 9.1 Grafo de Dependencias entre Módulos
 
 ```mermaid
 graph TD
-    A["🏗️ gcp_project\nAPIs + workload SAs"]
+  A["gcp_project\nAPIs + workload SAs"]
 
-    B["🪣 storage_shared\nstorage_customer"]
-    C["🔥 firestore_shared\nfirestore_customer"]
-    D["📨 pubsub_shared\npubsub_customer"]
-    E["🔑 iam_customer\nSAs + bindings"]
-    F["⏰ scheduler\njobs de mantenimiento"]
+  B["storage_shared\nstorage_customer"]
+  C["firestore_shared\nfirestore_customer"]
+  D["pubsub_shared\npubsub_customer"]
+  E["iam_customer\nSAs + bindings"]
+  F["scheduler\njobs de mantenimiento"]
 
-    A --> B
-    A --> C
-    A --> D
-    B --> E
-    C --> E
-    D --> E
-    D --> F
-    A --> F
+  A --> B
+  A --> C
+  A --> D
+  B --> E
+  C --> E
+  D --> E
+  D --> F
+  A --> F
 ```
 
 ### 9.2 Recursos creados por ambiente al agregar un cliente
@@ -758,126 +758,126 @@ Al añadir un `customer_id` en `terraform.tfvars` de preprod/prod, Terraform cre
 
 ```mermaid
 flowchart TD
-    classDef ext      fill:#E8EAED,color:#333,stroke:#aaa
-    classDef crf      fill:#4285F4,color:#fff,stroke:none
-    classDef topic    fill:#FBBC04,color:#333,stroke:none
-    classDef store    fill:#34A853,color:#fff,stroke:none
-    classDef firestore fill:#FF6D00,color:#fff,stroke:none
+  classDef ext   fill:#E8EAED,color:#333,stroke:#aaa
+  classDef crf   fill:#4285F4,color:#fff,stroke:none
+  classDef topic  fill:#FBBC04,color:#333,stroke:none
+  classDef store  fill:#34A853,color:#fff,stroke:none
+  classDef firestore fill:#FF6D00,color:#fff,stroke:none
 
-    FE["🖥️ Frontend / API Client"]:::ext
-    GUPSHUP["🌐 Gupshup / Meta\nWebhooks"]:::ext
-    SCHEDULER["⏰ Cloud Scheduler"]:::ext
+  FE["Frontend / API Client"]:::ext
+  GUPSHUP["Gupshup / Meta\nWebhooks"]:::ext
+  SCHEDULER["Cloud Scheduler"]:::ext
 
-    PARSER["⚙️ CRF Parser"]:::crf
-    RECEPTOR["⚙️ CRF Receptor"]:::crf
-    SENDER["⚙️ CRF Sender"]:::crf
-    PROCESSOR["⚙️ CRF Processor"]:::crf
-    PROJECTOR["⚙️ CRF Projector"]:::crf
-    MEDIA["⚙️ CRF Media Handler"]:::crf
+  PARSER["CRF Parser"]:::crf
+  RECEPTOR["CRF Receptor"]:::crf
+  SENDER["CRF Sender"]:::crf
+  PROCESSOR["CRF Processor"]:::crf
+  PROJECTOR["CRF Projector"]:::crf
+  MEDIA["CRF Media Handler"]:::crf
 
-    OC(["📨 outbound-commands"]):::topic
-    IE(["📨 inbound-events"]):::topic
-    SE(["📨 status-events"]):::topic
-    PU(["📨 projection-updates"]):::topic
-    MC(["📨 maintenance-commands"]):::topic
-    MED(["📨 media-commands"]):::topic
+  OC(["outbound-commands"]):::topic
+  IE(["inbound-events"]):::topic
+  SE(["status-events"]):::topic
+  PU(["projection-updates"]):::topic
+  MC(["maintenance-commands"]):::topic
+  MED(["media-commands"]):::topic
 
-    GCS["☁️ Cloud Storage\n/active · /done · /error · /archive · /data"]:::store
-    FS["🔥 Firestore\nconversations · gsid_map · active_conv"]:::firestore
+  GCS["Cloud Storage\n/active · /done · /error · /archive · /data"]:::store
+  FS["Firestore\nconversations · gsid_map · active_conv"]:::firestore
 
-    FE --> PARSER
-    PARSER --> OC --> SENDER -->|"Gupshup API\n(rate-limited)"| GUPSHUP
-    SENDER --> GCS
+  FE --> PARSER
+  PARSER --> OC --> SENDER -->|"Gupshup API\n(rate-limited)"| GUPSHUP
+  SENDER --> GCS
 
-    GUPSHUP -->|inbound webhook| RECEPTOR
-    RECEPTOR --> IE --> PROCESSOR
-    PROCESSOR --> GCS
-    PROCESSOR --> PU --> PROJECTOR --> FS
+  GUPSHUP -->|inbound webhook| RECEPTOR
+  RECEPTOR --> IE --> PROCESSOR
+  PROCESSOR --> GCS
+  PROCESSOR --> PU --> PROJECTOR --> FS
 
-    GUPSHUP -->|DLR webhook| RECEPTOR
-    RECEPTOR --> SE --> PROCESSOR
+  GUPSHUP -->|DLR webhook| RECEPTOR
+  RECEPTOR --> SE --> PROCESSOR
 
-    PROCESSOR --> MED --> MEDIA --> GCS
+  PROCESSOR --> MED --> MEDIA --> GCS
 
-    SCHEDULER --> MC
-    MC -->|aggregate · compress\ncleanup · purge| GCS
-    MC -->|purge_recent_events| FS
+  SCHEDULER --> MC
+  MC -->|aggregate · compress\ncleanup · purge| GCS
+  MC -->|purge_recent_events| FS
 ```
 
 ### 10.2 Flujo de Resolución Inbound — Context Funnel
 
 ```mermaid
 flowchart TD
-    classDef decision fill:#FBBC04,color:#333,stroke:none
-    classDef result   fill:#34A853,color:#fff,stroke:none
-    classDef action   fill:#4285F4,color:#fff,stroke:none
-    classDef start    fill:#E8EAED,color:#333,stroke:#aaa
+  classDef decision fill:#FBBC04,color:#333,stroke:none
+  classDef result  fill:#34A853,color:#fff,stroke:none
+  classDef action  fill:#4285F4,color:#fff,stroke:none
+  classDef start  fill:#E8EAED,color:#333,stroke:#aaa
 
-    START(["📩 Inbound Nativo\nno contiene vitesse_msg_id"]):::start
+  START(["Inbound Nativo\nno contiene vitesse_msg_id"]):::start
 
-    Q1{"¿Trae\ncontext.gsId?"}:::decision
-    Q2{"¿Trae\ncontext.id\n(wamid)?"}:::decision
-    Q3{"¿Existe\nactive_conv\n[app+phone]?"}:::decision
+  Q1{"¿Trae\ncontext.gsId?"}:::decision
+  Q2{"¿Trae\ncontext.id\n(wamid)?"}:::decision
+  Q3{"¿Existe\nactive_conv\n[app+phone]?"}:::decision
 
-    R1["🔍 lookup gsid_map/{gsId}\nvitesse_msg_id ✓"]:::result
-    R2["🔍 lookup wamid_map/{wamid}\nvitesse_msg_id ✓"]:::result
-    R3["🔍 usar vitesse_msg_id\nactivo ✓"]:::result
+  R1["lookup gsid_map/{gsId}\nvitesse_msg_id "]:::result
+  R2["lookup wamid_map/{wamid}\nvitesse_msg_id "]:::result
+  R3["usar vitesse_msg_id\nactivo "]:::result
 
-    R4["🆕 Crear nuevo vitesse_msg_id\n(transacción sobre active_conv)\ncampaign_id = organic_YYYY_MM"]:::action
+  R4["Crear nuevo vitesse_msg_id\n(transacción sobre active_conv)\ncampaign_id = organic_YYYY_MM"]:::action
 
-    START --> Q1
-    Q1 -->|✅ Sí — Prioridad 1| R1
-    Q1 -->|❌ No| Q2
-    Q2 -->|✅ Sí — Prioridad 2| R2
-    Q2 -->|❌ No| Q3
-    Q3 -->|✅ Sí — Prioridad 3| R3
-    Q3 -->|❌ No — Prioridad 4| R4
+  START --> Q1
+  Q1 -->| Sí — Prioridad 1| R1
+  Q1 -->| No| Q2
+  Q2 -->| Sí — Prioridad 2| R2
+  Q2 -->| No| Q3
+  Q3 -->| Sí — Prioridad 3| R3
+  Q3 -->| No — Prioridad 4| R4
 ```
 
 ### 10.3 Estructura de Recursos por Ambiente
 
 ```mermaid
 graph TB
-    subgraph PROD["🟠 Prod / Preprod — Aislamiento Total por Cliente"]
-        direction LR
+  subgraph PROD["Prod / Preprod — Aislamiento Total por Cliente"]
+    direction LR
 
-        subgraph cA["Cliente A"]
-            direction TB
-            a1["🪣 vtss-prod-A-msg"]
-            a2["🖼️ vtss-prod-A-mlt"]
-            a3["🔥 vtss-prod-A-db"]
-            a4["📨 Topics A-*\n(6 topics + 6 DLQs)"]
-            a5["🔑 SA: A-be · A-fe"]
-        end
-
-        subgraph cB["Cliente B"]
-            direction TB
-            b1["🪣 vtss-prod-B-msg"]
-            b2["🖼️ vtss-prod-B-mlt"]
-            b3["🔥 vtss-prod-B-db"]
-            b4["📨 Topics B-*\n(6 topics + 6 DLQs)"]
-            b5["🔑 SA: B-be · B-fe"]
-        end
-
-        subgraph cN["Cliente N"]
-            direction TB
-            n1["🪣 vtss-prod-N-msg"]
-            n2["🖼️ vtss-prod-N-mlt"]
-            n3["🔥 vtss-prod-N-db"]
-            n4["📨 Topics N-*\n(6 topics + 6 DLQs)"]
-            n5["🔑 SA: N-be · N-fe"]
-        end
-
-        shared_crf["⚙️ CRFs compartidos\ncrf-parser · crf-receptor · crf-sender\ncrf-processor · crf-projector · crf-media"]
+    subgraph cA["Cliente A"]
+      direction TB
+      a1["vtss-prod-A-msg"]
+      a2["vtss-prod-A-mlt"]
+      a3["vtss-prod-A-db"]
+      a4["Topics A-*\n(6 topics + 6 DLQs)"]
+      a5["SA: A-be · A-fe"]
     end
 
-    subgraph DEV["🔵 Dev / Staging — Recursos Compartidos con Prefijos"]
-        direction TB
-        d1["🪣 vtss-dev-messaging\n(todos los clientes, prefijo en ruta)"]
-        d2["🖼️ vtss-dev-multimedia\n(todos los clientes, prefijo en ruta)"]
-        d3["🔥 vtss-dev-db\n(colecciones prefijadas: c001_conversations, ...)"]
-        d4["📨 Topics compartidos\ncustomer_id en atributos del mensaje"]
+    subgraph cB["Cliente B"]
+      direction TB
+      b1["vtss-prod-B-msg"]
+      b2["vtss-prod-B-mlt"]
+      b3["vtss-prod-B-db"]
+      b4["Topics B-*\n(6 topics + 6 DLQs)"]
+      b5["SA: B-be · B-fe"]
     end
+
+    subgraph cN["Cliente N"]
+      direction TB
+      n1["vtss-prod-N-msg"]
+      n2["vtss-prod-N-mlt"]
+      n3["vtss-prod-N-db"]
+      n4["Topics N-*\n(6 topics + 6 DLQs)"]
+      n5["SA: N-be · N-fe"]
+    end
+
+    shared_crf["CRFs compartidos\ncrf-parser · crf-receptor · crf-sender\ncrf-processor · crf-projector · crf-media"]
+  end
+
+  subgraph DEV["Dev / Staging — Recursos Compartidos con Prefijos"]
+    direction TB
+    d1["vtss-dev-messaging\n(todos los clientes, prefijo en ruta)"]
+    d2["vtss-dev-multimedia\n(todos los clientes, prefijo en ruta)"]
+    d3["vtss-dev-db\n(colecciones prefijadas: c001_conversations, ...)"]
+    d4["Topics compartidos\ncustomer_id en atributos del mensaje"]
+  end
 ```
 
 ---
@@ -894,20 +894,20 @@ brew install terraform
 gcloud auth application-default login
 
 # 3. Crear proyectos GCP (una vez por organización)
-gcloud projects create vtss-dev     --name="Vitesse Dev"
-gcloud projects create vtss-stg     --name="Vitesse Staging"
+gcloud projects create vtss-dev   --name="Vitesse Dev"
+gcloud projects create vtss-stg   --name="Vitesse Staging"
 gcloud projects create vtss-preprod --name="Vitesse Preprod"
-gcloud projects create vtss-prod    --name="Vitesse Prod"
+gcloud projects create vtss-prod  --name="Vitesse Prod"
 
 # 4. Vincular billing account a cada proyecto
 for ENV in dev stg preprod prod; do
-  gcloud billing projects link vtss-$ENV --billing-account=BILLING_ACCOUNT_ID
+ gcloud billing projects link vtss-$ENV --billing-account=BILLING_ACCOUNT_ID
 done
 
 # 5. Crear buckets de estado Terraform (bootstrapping — solo una vez)
 for ENV in dev stg preprod prod; do
-  gsutil mb -p vtss-$ENV -l US gs://vtss-$ENV-tfstate
-  gsutil versioning set on gs://vtss-$ENV-tfstate
+ gsutil mb -p vtss-$ENV -l US gs://vtss-$ENV-tfstate
+ gsutil versioning set on gs://vtss-$ENV-tfstate
 done
 ```
 
@@ -949,32 +949,32 @@ Terraform creará automáticamente por `for_each` todos los recursos listados en
 
 ```mermaid
 graph LR
-    A["1️⃣ gcp_project"] --> B["2️⃣ storage"]
-    A --> C["3️⃣ firestore"]
-    A --> D["4️⃣ pubsub"]
-    B --> E["5️⃣ iam_customer"]
-    C --> E
-    D --> E
-    D --> F["6️⃣ scheduler"]
+  A["1 gcp_project"] --> B["2 storage"]
+  A --> C["3 firestore"]
+  A --> D["4 pubsub"]
+  B --> E["5 iam_customer"]
+  C --> E
+  D --> E
+  D --> F["6 scheduler"]
 ```
 
 ### 11.5 APIs GCP Habilitadas por el Módulo `gcp_project`
 
 | API | Servicio |
 |:----|:---------|
-| `storage.googleapis.com` | ☁️ Cloud Storage |
-| `pubsub.googleapis.com` | 📨 Cloud Pub/Sub |
-| `firestore.googleapis.com` | 🔥 Firestore |
-| `firebase.googleapis.com` | 🔐 Firebase Auth |
-| `run.googleapis.com` | ⚙️ Cloud Run (CRFs) |
-| `cloudscheduler.googleapis.com` | ⏰ Cloud Scheduler |
-| `secretmanager.googleapis.com` | 🔒 Secret Manager |
-| `iam.googleapis.com` | 🔑 IAM |
-| `cloudresourcemanager.googleapis.com` | 🏗️ Resource Manager |
-| `artifactregistry.googleapis.com` | 📦 Artifact Registry |
-| `cloudbuild.googleapis.com` | 🔨 Cloud Build (CI/CD) |
-| `monitoring.googleapis.com` | 📊 Cloud Monitoring |
-| `logging.googleapis.com` | 📋 Cloud Logging |
+| `storage.googleapis.com` | Cloud Storage |
+| `pubsub.googleapis.com` | Cloud Pub/Sub |
+| `firestore.googleapis.com` | Firestore |
+| `firebase.googleapis.com` | Firebase Auth |
+| `run.googleapis.com` | Cloud Run (CRFs) |
+| `cloudscheduler.googleapis.com` | Cloud Scheduler |
+| `secretmanager.googleapis.com` | Secret Manager |
+| `iam.googleapis.com` | IAM |
+| `cloudresourcemanager.googleapis.com` | Resource Manager |
+| `artifactregistry.googleapis.com` | Artifact Registry |
+| `cloudbuild.googleapis.com` | Cloud Build (CI/CD) |
+| `monitoring.googleapis.com` | Cloud Monitoring |
+| `logging.googleapis.com` | Cloud Logging |
 
 ---
 
