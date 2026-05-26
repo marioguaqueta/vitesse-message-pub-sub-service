@@ -37,7 +37,7 @@ Vitesse v11 es una plataforma de mensajería multicanal (WhatsApp, Instagram, Me
 
 | Capa | Servicio GCP | Responsabilidad |
 |:----:|:------------:|:----------------|
-| 🗄️ **Event Log** | Cloud Storage | Registro inmutable de eventos — `/active`, `/archived`, `/data` |
+| 🗄️ **Event Log** | Cloud Storage | Registro inmutable de eventos — `/active`, `/done`, `/error`, `/archive`, `/data` |
 | 🔁 **Backbone Transaccional** | Cloud Pub/Sub | Desacoplamiento total, buffering, reintentos y DLQ entre todos los componentes |
 | ⚡ **Proyección Viva** | Firestore Native | Índices de correlación y vista viva para el frontend sin polling |
 
@@ -65,7 +65,7 @@ graph TB
     end
 
     subgraph LAYER1["⬛ Cloud Storage — Event Log Inmutable"]
-        GCS["/active  ·  /archived  ·  /data  ·  /media"]
+        GCS["/active  ·  /done  ·  /error  ·  /archive  ·  /data"]
     end
 
     API --> PIPELINE
@@ -83,7 +83,7 @@ graph TB
 | Principio | Decisión de Arquitectura | Resultado Esperado |
 |:----------|:------------------------|:-------------------|
 | 🧵 Conversación como entidad raíz | `vitesse_msg_id` es la raíz de conversación | Todos los `gsId`/`wamid` se correlacionan contra un mismo hilo |
-| 💾 Event log barato | `/active` + `/archived` + `/data` en Cloud Storage | Replay, compresión, auditoría y analítica sin saturar la BD |
+| 💾 Event log barato | `/active` + `/archive` + `/data` en Cloud Storage | Replay, compresión, auditoría y analítica sin saturar la BD |
 | 🔍 Lookup rápido | Firestore para índices y proyección viva | Frontend y correlación sin listar objetos en Storage |
 | 📡 Frontend por push | Firestore + listeners desde backend | Sin polling, menor latencia visible |
 | 🏷️ Campaign siempre presente | `campaign_id` real o sintético mensual (`organic_YYYY_MM`) | Trazabilidad comercial completa |
@@ -191,38 +191,73 @@ vtss-{env}-{customer_id}-{sufijo}
 
 ### 5.1 `MESSAGING_STORAGE` — Estructura de Directorios
 
+El bucket de mensajería organiza sus objetos según el contrato de identificadores definido en los documentos de arquitectura.
+
+> **`vm_conv_id`** = `{channel_provider}/{channel_identifier}/{contact_identifier}`
+> **`vm_msg_id`** = `YYYYMMDD/{timestamp}-{uuid[:6]}.json`
+
 ```
 vtss-{env}-{cid}-msg/
 │
-├── active/
-│   ├── todo/
-│   │   ├── outbound/{app}/{YYYYMMDD}/{HH}/{campaign_id}/{vitesse_msg_id}/{ts}_{local_ref}.json
+├── active/                                                              ← Live Queue: operaciones en vuelo
+│   ├── todo/                                                            ← Pendientes de procesar
+│   │   ├── outbound/
+│   │   │   └── {channel_provider}/{channel_identifier}/{contact_identifier}/    ← vm_conv_id
+│   │   │       └── YYYYMMDD/{timestamp}-{uuid[:6]}.json                ← vm_msg_id
 │   │   └── inbound/
-│   │       ├── message/{app}/{YYYYMMDD}/{HH}/{campaign_id}/{vitesse_msg_id}/{ts}_{wamid}.json
-│   │       └── status/ {app}/{YYYYMMDD}/{HH}/{campaign_id}/{vitesse_msg_id}/{ts}_{gsId}_{status}.json
-│   ├── in_process/
-│   │   ├── outbound/...
-│   │   └── inbound/{message,status}/...
-│   ├── done/
-│   │   ├── outbound/{app}/{YYYYMMDD}/{HH}/{campaign_id}/{vitesse_msg_id}/{ts}_{gsId}.json
-│   │   └── inbound/{message,status}/...
-│   └── error/
-│       ├── outbound/...    ← DLQ agotado, sin ack del proveedor
-│       └── inbound/{message,status}/...
+│   │       ├── message/
+│   │       │   └── {channel_provider}/{channel_identifier}/{contact_identifier}/
+│   │       │       └── YYYYMMDD/{timestamp}-{uuid[:6]}.json
+│   │       └── status/
+│   │           └── {channel_provider}/{channel_identifier}/{contact_identifier}/
+│   │               └── YYYYMMDD/{timestamp}-{uuid[:6]}.json
+│   └── in_process/                                                      ← Siendo procesados actualmente
+│       ├── outbound/
+│       │   └── {channel_provider}/{channel_identifier}/{contact_identifier}/
+│       │       └── YYYYMMDD/{timestamp}-{uuid[:6]}.json
+│       └── inbound/
+│           ├── message/...
+│           └── status/...
 │
-├── archived/
-│   └── {app}/{YYYYMMDD}.jsonl.gz       ← Compressor D-30 genera este archivo
+├── done/                                                                ← Procesados exitosamente
+│   ├── outbound/
+│   │   └── {channel_provider}/{channel_identifier}/{contact_identifier}/
+│   │       └── YYYYMMDD/{timestamp}-{uuid[:6]}.json
+│   └── inbound/
+│       ├── message/...
+│       └── status/...
 │
-├── data/
-│   └── {app}/{YYYYMMDD}.parquet        ← Aggregator genera este archivo
+├── error/                                                               ← DLQ agotado / sin ack del proveedor
+│   ├── outbound/...
+│   └── inbound/
+│       ├── message/...
+│       └── status/...
 │
-├── campaign/
+├── campaign/                                                            ← Estructura secundaria de punteros
 │   └── {channel_provider}/{channel_identifier}/{campaign_id}/
-│       └── ...                         → punteros al JSON en /active/
 │
-└── media/
-    └── {app}/{YYYY}/{MM}/{hash}.{ext}  ← CRF Media Handler
+├── data/                                                                ← Archivos resumen — Aggregator
+│   └── {channel_provider}/{channel_identifier}/YYYYMMDD.parquet
+│
+└── archive/                                                             ← Archivos comprimidos — Compressor
+    └── {channel_provider}/{channel_identifier}/YYYYMMDD.jsonl.gz
 ```
+
+#### Valores de `channel_provider`
+
+| Canal | `channel_provider` | `channel_identifier` | `contact_identifier` |
+|:------|:-------------------|:---------------------|:---------------------|
+| WhatsApp | `whatsapp_business_account` | `phone_number_id` | `user_id` |
+| Instagram | `instagram` | `entry[].id` | `entry[].messaging.sender.id` |
+| Messenger | `page` | `entry[].id` | `entry[].messaging.sender.id` |
+
+#### Regla de nacimiento de objetos
+
+| Tipo de evento | Ruta de creación inicial |
+|:---------------|:------------------------|
+| Outbound | `active/todo/outbound/{vm_conv_id}/YYYYMMDD/{timestamp}-{uuid[:6]}.json` |
+| Inbound message | `active/todo/inbound/message/{vm_conv_id}/YYYYMMDD/{timestamp}-{uuid[:6]}.json` |
+| Inbound status (DLR) | `active/todo/inbound/status/{vm_conv_id}/YYYYMMDD/{timestamp}-{uuid[:6]}.json` |
 
 ### 5.2 `MULTIMEDIA_STORAGE` — Estructura de Directorios
 
@@ -230,34 +265,36 @@ vtss-{env}-{cid}-msg/
 vtss-{env}-{cid}-mlt/
 │
 ├── catalog_files/
-│   └── {file_name}-{hash}.{ext}        ← Assets reutilizables del cliente
+│   └── {file_name}-{hash}.{ext}                             ← Assets reutilizables del cliente
 │
 └── conversational_files/
-    └── {vm_conv_id}/
-        └── {file_name}-{hash}.{ext}    ← Assets vinculados a una conversación
+    └── {channel_provider}/{channel_identifier}/{contact_identifier}/    ← vm_conv_id
+        └── {file_name}-{hash}.{ext}                         ← SHA-256 en metadata
 ```
+
+La estructura basada en `vm_conv_id` permite permisos dinámicos, expiración por conversación y auditoría por contacto.
 
 ### 5.3 Lifecycle Rules de Cloud Storage
 
 | Prefijo | Acción | Condición |
 |:--------|:------:|:---------:|
-| `active/done/` | 🗑️ Delete | age > **45 días** |
+| `done/` | 🗑️ Delete | age > **45 días** |
 | `active/in_process/` | 🗑️ Delete | age > **7 días** (huérfanos) |
-| `active/error/` | 🗑️ Delete | age > **90 días** |
-| `archived/` | → Nearline | age > **30 días** |
-| `archived/` | → Coldline | age > **365 días** |
+| `error/` | 🗑️ Delete | age > **90 días** |
+| `archive/` | → Nearline | age > **30 días** |
+| `archive/` | → Coldline | age > **365 días** |
 | `data/` | → Nearline | age > **30 días** |
 | `data/` | 🗑️ Delete | age > **730 días** |
-| `media/` (multimedia) | → Nearline | age > **90 días** |
+| `conversational_files/` (multimedia) | → Nearline | age > **90 días** |
 
 ### 5.4 Dev/Staging — Separación por Prefijo de Objeto
 
-En dev/staging el `customer_id` es el primer segmento de ruta de cada objeto:
+En dev/staging el `customer_id` es el primer segmento de ruta para mantener el aislamiento lógico dentro del bucket compartido:
 
 ```
-active/todo/outbound/{customer_id}/{app}/{YYYYMMDD}/...
-archived/{customer_id}/{app}/{YYYYMMDD}.jsonl.gz
-data/{customer_id}/{app}/{YYYYMMDD}.parquet
+active/todo/outbound/{customer_id}/{channel_provider}/{channel_identifier}/{contact_identifier}/YYYYMMDD/{timestamp}-{uuid[:6]}.json
+archive/{customer_id}/{channel_provider}/{channel_identifier}/YYYYMMDD.jsonl.gz
+data/{customer_id}/{channel_provider}/{channel_identifier}/YYYYMMDD.parquet
 ```
 
 ---
@@ -745,7 +782,7 @@ flowchart TD
     MC(["📨 maintenance-commands"]):::topic
     MED(["📨 media-commands"]):::topic
 
-    GCS["☁️ Cloud Storage\n/active · /archived · /data · /media"]:::store
+    GCS["☁️ Cloud Storage\n/active · /done · /error · /archive · /data"]:::store
     FS["🔥 Firestore\nconversations · gsid_map · active_conv"]:::firestore
 
     FE --> PARSER
